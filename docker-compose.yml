@@ -1,6 +1,79 @@
+# x-logging: &default-logging
+#   driver: "json-file"
+#   options:
+#     max-size: "50m"
+#     max-file: "5"
+
+# services:
+#   app:
+#     build: .
+#     env_file: .env
+#     ports:
+#       - "127.0.0.1:8000:8000"
+#     depends_on:
+#       - redis
+#     restart: unless-stopped
+#     dns:
+#       - 8.8.8.8
+#       - 1.1.1.1
+#     volumes:
+#       - shared-temp:/app/temp_inputs
+#       - backups:/app/backups
+#     logging: *default-logging # ✅ ДОБАВЛЕНО
+#     healthcheck:
+#       test: [ "CMD", "curl", "-fsS", "http://localhost:8000/healthz" ]
+#       interval: 15s
+#       timeout: 3s
+#       retries: 5
+
+#   worker:
+#     build: .
+#     command: [ "arq", "services.queue.WorkerSettings" ]
+#     env_file: .env
+#     depends_on:
+#       - redis
+#     restart: unless-stopped
+#     dns:
+#       - 8.8.8.8
+#       - 1.1.1.1
+#     volumes:
+#       - shared-temp:/app/temp_inputs
+#     logging: *default-logging # ✅ ДОБАВЛЕНО
+
+#   cleanup:
+#     build: .
+#     command: >
+#       sh -c " while true; do
+#         python cleanup_redis.py;
+#         sleep 600;
+#       done "
+#     env_file: .env
+#     depends_on:
+#       - redis
+#     restart: unless-stopped
+#     dns:
+#       - 8.8.8.8
+#       - 1.1.1.1
+#     volumes:
+#       - shared-temp:/app/temp_inputs
+#     logging: *default-logging # ✅ ДОБАВЛЕНО
+
+#   redis:
+#     image: redis:7-alpine
+#     command: [ "redis-server", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no", "--stop-writes-on-bgsave-error", "no" ]
+#     restart: unless-stopped
+#     logging: *default-logging # ✅ ДОБАВЛЕНО
+
+# volumes:
+#   shared-temp:
+#     driver: local
+#     driver_opts:
+#       type: tmpfs # ✅ ДОБАВЛЕНО: tmpfs не персистентный
+#       device: tmpfs
+#       o: size=4g # ✅ ДОБАВЛЕНО: лимит 2GB
+
 version: "3.9"
 
-# ✅ Общий блок для ротации логов
 x-logging: &default-logging
   driver: "json-file"
   options:
@@ -21,8 +94,8 @@ services:
       - 1.1.1.1
     volumes:
       - shared-temp:/app/temp_inputs
-      - backups:/app/backups
-    logging: *default-logging # ✅ ДОБАВЛЕНО
+      - ./backups:/app/backups # ✅ ИЗМЕНЕНО: локальная директория
+    logging: *default-logging
     healthcheck:
       test: [ "CMD", "curl", "-fsS", "http://localhost:8000/healthz" ]
       interval: 15s
@@ -41,7 +114,7 @@ services:
       - 1.1.1.1
     volumes:
       - shared-temp:/app/temp_inputs
-    logging: *default-logging # ✅ ДОБАВЛЕНО
+    logging: *default-logging
 
   cleanup:
     build: .
@@ -59,18 +132,18 @@ services:
       - 1.1.1.1
     volumes:
       - shared-temp:/app/temp_inputs
-    logging: *default-logging # ✅ ДОБАВЛЕНО
+    logging: *default-logging
 
   redis:
     image: redis:7-alpine
     command: [ "redis-server", "--maxmemory-policy", "allkeys-lru", "--save", "", "--appendonly", "no", "--stop-writes-on-bgsave-error", "no" ]
     restart: unless-stopped
-    logging: *default-logging # ✅ ДОБАВЛЕНО
+    logging: *default-logging
 
 volumes:
   shared-temp:
     driver: local
     driver_opts:
-      type: tmpfs # ✅ ДОБАВЛЕНО: tmpfs не персистентный
+      type: tmpfs
       device: tmpfs
-      o: size=2g # ✅ ДОБАВЛЕНО: лимит 2GB
+      o: size=4g # ✅ Увеличил с 2GB до 4GB

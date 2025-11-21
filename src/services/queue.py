@@ -16,6 +16,12 @@ import httpx
 import redis.asyncio as aioredis
 from aiogram import Bot
 from aiogram.exceptions import TelegramForbiddenError,TelegramBadRequest
+from aiogram.exceptions import (
+    TelegramForbiddenError,
+    TelegramBadRequest,
+    TelegramNetworkError,  # ✅ ДОБАВИТЬ
+    TelegramServerError,    # ✅ ДОБАВИТЬ
+)
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.redis import DefaultKeyBuilder, RedisStorage
@@ -183,7 +189,10 @@ async def enqueue_generation(
             database=settings.REDIS_DB_CACHE,
         )
     )
-    await redis_pool.enqueue_job("process_generation", chat_id, prompt, photos, aspect_ratio)
+    try:
+            await redis_pool.enqueue_job("process_generation", chat_id, prompt, photos, aspect_ratio)
+    finally:
+            await redis_pool.close()
 
 
 async def startup(ctx: dict[str, Bot]):
@@ -253,9 +262,8 @@ async def _maybe_refund_if_deducted(
     reason: str
 ) -> None:
     rcache = aioredis.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT, db=settings.REDIS_DB_CACHE)
-    deb_key = f"credits:debited:{task_uuid}"
     try:
-        debited = await rcache.get(deb_key)
+        debited = await rcache.get(f"credits:debited:{task_uuid}")
     except Exception:
         debited = None
     finally:
@@ -277,13 +285,16 @@ async def _maybe_refund_if_deducted(
                 )
                 await s.commit()
                 log.info(_j("refund.ok", cid=cid, chat_id=chat_id, task_uuid=task_uuid, amount=amount, reason=reason))
+                
+                # ✅ ИСПРАВЛЕНО: Redis с гарантией закрытия
+                rcache2 = aioredis.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT, db=settings.REDIS_DB_CACHE)
                 try:
-                    rcache2 = aioredis.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT, db=settings.REDIS_DB_CACHE)
-                    await rcache2.delete(deb_key)
+                    await rcache2.delete(f"credits:debited:{task_uuid}")
+                finally:
                     await rcache2.aclose()
-                except Exception:
-                    pass
                 return
+            else:
+                log.warning(_j("refund.user_not_found", cid=cid, chat_id=chat_id, task_uuid=task_uuid))
     except Exception:
         log.exception(_j("refund.db_error", cid=cid, task_uuid=task_uuid))
 

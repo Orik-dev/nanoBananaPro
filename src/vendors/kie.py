@@ -53,7 +53,7 @@ class KieClient:
         *,
         output_format: Optional[str] = None,
         image_size: Optional[str] = None,
-        user_model: str = "standard",  # ✅ ДОБАВЛЕНО
+        user_model: str = "standard",
         cid: Optional[str] = None,
     ) -> str:
         """
@@ -73,10 +73,11 @@ class KieClient:
             ))
             prompt = prompt[:2000]
 
-        # ✅ ОБНОВЛЕНО: выбор модели в зависимости от параметра
+        # ✅ ИСПРАВЛЕНО: Выбор модели по документации
         has_images = bool(image_urls)
         
         if user_model == "pro":
+            # ✅ Для Pro используем nano-banana-pro (может быть одна модель для create и edit)
             model = settings.KIE_MODEL_PRO_EDIT if has_images else settings.KIE_MODEL_PRO_CREATE
         else:
             model = settings.KIE_MODEL_EDIT if has_images else settings.KIE_MODEL_CREATE
@@ -86,9 +87,13 @@ class KieClient:
             "input": {
                 "prompt": prompt,
                 "output_format": output_format or settings.KIE_OUTPUT_FORMAT,
-                "image_size": image_size or settings.KIE_IMAGE_SIZE,
+                "image_size": image_size or settings.KIE_IMAGE_SIZE,  # ✅ НЕ ТРОГАЕМ - aspect ratio
             }
         }
+
+        # ✅ ДОБАВЛЕНО: Параметр resolution для Pro модели
+        if user_model == "pro":
+            payload["input"]["resolution"] = "4K"  # ✅ По умолчанию 4K для Pro
 
         if has_images:
             payload["input"]["image_urls"] = image_urls[:5]
@@ -100,12 +105,14 @@ class KieClient:
             "kie.create.request",
             cid=cid,
             model=model,
-            user_model=user_model,  # ✅ ДОБАВЛЕНО
+            user_model=user_model,
+            resolution=payload["input"].get("resolution", "default"),  # ✅ ДОБАВЛЕНО
             urls=len(image_urls) if image_urls else 0,
             prompt_len=len(prompt),
             original_prompt_len=original_len
         ))
         
+        # ... остальной код без изменений
         await kie_rate_limiter.acquire()
         delay = 2.0
         max_attempts = 5
@@ -128,7 +135,6 @@ class KieClient:
                     continue
                 raise KieError(f"network_error:{str(e)[:100]}")
 
-            # ✅ 1. ОБРАБОТКА HTTP 429
             if r.status_code == 429:
                 ra = r.headers.get("Retry-After")
                 wait_s = float(ra) if (ra and str(ra).replace('.', '').isdigit()) else delay
@@ -147,17 +153,14 @@ class KieClient:
                 else:
                     raise KieError("rate_limit_exceeded_http_429")
 
-            # Парсинг ответа
             try:
                 data = r.json()
             except Exception:
                 data = {"code": r.status_code, "message": r.text}
 
-            # ✅ 2. ГЛАВНОЕ ИСПРАВЛЕНИЕ: ОБРАБОТКА RATE LIMIT В ТЕЛЕ ОТВЕТА
             if r.status_code == 200:
                 msg = str(data.get("message") or data.get("msg") or "").lower()
                 
-                # Проверяем различные формулировки rate limit
                 rate_limit_indicators = [
                     "frequency is too high",
                     "try again later",
@@ -185,9 +188,7 @@ class KieClient:
                     else:
                         raise KieError(f"rate_limit_exceeded:{msg[:200]}")
 
-            # ✅ 3. ОБРАБОТКА 5XX
             if 500 <= r.status_code < 600:
-                # Проверяем, что это именно Cloudflare/KIE ошибка
                 is_cloudflare_error = "cloudflare" in (r.text or "").lower() or "kie.ai" in (r.text or "").lower()
                 
                 log.error(_j(
@@ -200,7 +201,6 @@ class KieClient:
                 ))
                 
                 if attempt < max_attempts:
-                    # ✅ Для 5xx ошибок делаем более длинную задержку
                     wait_time = delay * 2 if is_cloudflare_error else delay
                     log.warning(_j(
                         "kie.create.5xx_retry",
@@ -212,13 +212,11 @@ class KieClient:
                     delay = min(delay * 2.0, 30.0)
                     continue
                 else:
-                    # ✅ Более понятное сообщение об ошибке
                     if is_cloudflare_error:
                         raise KieError("upstream_unavailable:cloudflare_error")
                     else:
                         raise KieError("upstream_5xx")
 
-            # ✅ 4. ПРОВЕРКА УСПЕШНОСТИ
             code = int(data.get("code", 0))
             if r.status_code != 200 or code != 200:
                 msg = (data.get("message") or data.get("msg") or r.text or "failed")[:200]
@@ -231,7 +229,6 @@ class KieClient:
                 ))
                 raise KieError(f"bad_request:{msg}")
 
-            # ✅ 5. УСПЕХ
             task_id = (data.get("data") or {}).get("taskId")
             if not task_id:
                 raise KieError("no_task_id")

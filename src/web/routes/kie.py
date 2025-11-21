@@ -67,12 +67,13 @@ async def _release_webhook_lock(lock: Optional[Tuple[aioredis.Redis, str]]) -> N
 
 
 async def _clear_pending_marker(task_id: str) -> None:
+    r = aioredis.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT, db=settings.REDIS_DB_CACHE)
     try:
-        r = aioredis.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT, db=settings.REDIS_DB_CACHE)
         await r.delete(f"task:pending:{task_id}")
-        await r.aclose()
     except Exception:
         pass
+    finally:
+        await r.aclose()  # ✅ ДОБАВИТЬ
 
 
 async def _clear_wait_and_reset(bot, chat_id: int, *, back_to: str = "auto") -> None:

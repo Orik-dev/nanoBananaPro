@@ -21,14 +21,24 @@ class Settings(BaseSettings):
     FREEPIK_WEBHOOK_SECRET: str
 
     # ✅ ОБНОВЛЕНО: добавлены модели и 4k по умолчанию
+    # KIE_API_KEY: str
+    # KIE_BASE: str = "https://api.kie.ai/api/v1"
+    # KIE_MODEL_CREATE: str = "google/nano-banana"
+    # KIE_MODEL_EDIT: str = "google/nano-banana-edit"
+    # KIE_MODEL_PRO_CREATE: str = "google/nano-banana-pro"  # ✅ ДОБАВЛЕНО
+    # KIE_MODEL_PRO_EDIT: str = "google/nano-banana-pro-edit"  # ✅ ДОБАВЛЕНО
+    # KIE_OUTPUT_FORMAT: str = "png"
+    # KIE_IMAGE_SIZE: str = "4k"  # ✅ ИЗМЕНЕНО: было "auto"
+    
+    # ✅ ИСПРАВЛЕНО: Правильные названия моделей из документации
     KIE_API_KEY: str
     KIE_BASE: str = "https://api.kie.ai/api/v1"
     KIE_MODEL_CREATE: str = "google/nano-banana"
     KIE_MODEL_EDIT: str = "google/nano-banana-edit"
-    KIE_MODEL_PRO_CREATE: str = "google/nano-banana-pro"  # ✅ ДОБАВЛЕНО
-    KIE_MODEL_PRO_EDIT: str = "google/nano-banana-pro-edit"  # ✅ ДОБАВЛЕНО
+    KIE_MODEL_PRO_CREATE: str = "nano-banana-pro"       # ✅ БЕЗ google/
+    KIE_MODEL_PRO_EDIT: str = "nano-banana-pro"         # ✅ БЕЗ google/ (может быть одна модель)
     KIE_OUTPUT_FORMAT: str = "png"
-    KIE_IMAGE_SIZE: str = "4k"  # ✅ ИЗМЕНЕНО: было "auto"
+    KIE_IMAGE_SIZE: str = "auto"  # ✅ НЕ ТРОГАЕМ - это aspect ratio
     
     RUNBLOB_API_KEY: str
     RUNBLOB_BASE: str = "https://api.runblob.io/api/v1/gemini"

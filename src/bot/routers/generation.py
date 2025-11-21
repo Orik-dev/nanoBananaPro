@@ -489,6 +489,101 @@ async def cancel_session(c: CallbackQuery, state: FSMContext) -> None:
         pass
 
 
+# async def send_generation_result(
+#     chat_id: int,
+#     task_uuid: str,
+#     prompt: str,
+#     image_url: str,
+#     file_path: str,
+#     bot: Bot,
+# ) -> None:
+#     from aiogram.fsm.context import FSMContext
+#     from aiogram.fsm.storage.redis import RedisStorage, DefaultKeyBuilder
+#     from aiogram.fsm.storage.base import StorageKey
+#     import redis.asyncio as redis
+
+#     redis_cli = redis.Redis(host=settings.REDIS_HOST, port=settings.REDIS_PORT, db=settings.REDIS_DB_FSM)
+    
+#     try:
+#         storage = RedisStorage(redis=redis_cli, key_builder=DefaultKeyBuilder(with_bot_id=True))
+#         bot_info = await bot.get_me()
+#         state = FSMContext(storage=storage, key=StorageKey(bot_info.id, chat_id, chat_id))
+
+#         data = await state.get_data()
+#         wait_msg_id = data.get("wait_msg_id")
+#         if wait_msg_id:
+#             try:
+#                 await bot.delete_message(chat_id, wait_msg_id)
+#             except Exception:
+#                 pass
+
+#         mode = (data.get("mode") or "edit").lower().strip()
+
+#         if file_path and os.path.exists(file_path):
+#             await safe_send_document(
+#                 bot,
+#                 chat_id,
+#                 file_path,
+#                 caption="Скачать файлом — качество будет лучше, чем при просмотре здесь"
+#             )
+
+#         if mode == "create":
+#             result_msg = await safe_send_photo(
+#                 bot,
+#                 chat_id,
+#                 # image_url, 
+#                 FSInputFile(file_path),
+#                 caption="Готово ✅ Напишите новый промт, чтобы сгенерировать ещё.",
+#                 reply_markup=None,
+#             )
+            
+#             result_file_id = None
+#             if result_msg and result_msg.photo:
+#                 result_file_id = result_msg.photo[-1].file_id
+            
+#             await state.clear()
+#             await state.set_state(CreateStates.waiting_prompt)
+#             await state.update_data(
+#                 mode="create",
+#                 prompt=prompt,
+#                 last_result_file_id=result_file_id,
+#                 file_path=file_path,
+#             )
+#             return
+
+#         result_msg = await safe_send_photo(
+#             bot,
+#             chat_id,
+#             # image_url,
+#             FSInputFile(file_path),
+#             caption="<b>Если хотите что-то изменить или добавить напишите в чат ⬇️</b>",
+#             reply_markup=kb_final_result(),
+#         )
+
+#         result_file_id = None
+#         if result_msg and result_msg.photo:
+#             result_file_id = result_msg.photo[-1].file_id
+
+#         photos = data.get("photos", [])
+#         base_prompt = data.get("base_prompt") or prompt
+#         edits = data.get("edits") or []
+        
+#         await state.clear()
+#         await state.set_state(GenStates.final_menu)
+#         await state.update_data(
+#             mode="edit",
+#             prompt=prompt,
+#             base_prompt=base_prompt,
+#             edits=edits,
+#             photos=photos,
+#             last_result_file_id=result_file_id,
+#             file_path=file_path,
+#         )
+    
+#     finally:
+#         await redis_cli.aclose()
+
+
 async def send_generation_result(
     chat_id: int,
     task_uuid: str,
@@ -496,6 +591,7 @@ async def send_generation_result(
     image_url: str,
     file_path: str,
     bot: Bot,
+    preview_path: Optional[str] = None,  # ✅ ДОБАВЛЕНО
 ) -> None:
     from aiogram.fsm.context import FSMContext
     from aiogram.fsm.storage.redis import RedisStorage, DefaultKeyBuilder
@@ -518,7 +614,12 @@ async def send_generation_result(
                 pass
 
         mode = (data.get("mode") or "edit").lower().strip()
+        
+        # ✅ Если preview_path не передан - используем оригинал
+        if not preview_path:
+            preview_path = file_path
 
+        # ✅ Отправляем document для скачивания (оригинал)
         if file_path and os.path.exists(file_path):
             await safe_send_document(
                 bot,
@@ -527,12 +628,12 @@ async def send_generation_result(
                 caption="Скачать файлом — качество будет лучше, чем при просмотре здесь"
             )
 
+        # ✅ Режим create
         if mode == "create":
             result_msg = await safe_send_photo(
                 bot,
                 chat_id,
-                # image_url, 
-                FSInputFile(file_path),
+                FSInputFile(preview_path),  # ✅ Используем превью
                 caption="Готово ✅ Напишите новый промт, чтобы сгенерировать ещё.",
                 reply_markup=None,
             )
@@ -551,11 +652,11 @@ async def send_generation_result(
             )
             return
 
+        # ✅ Режим edit - отправляем photo с кнопками (превью)
         result_msg = await safe_send_photo(
             bot,
             chat_id,
-            # image_url,
-            FSInputFile(file_path),
+            FSInputFile(preview_path),  # ✅ Используем превью
             caption="<b>Если хотите что-то изменить или добавить напишите в чат ⬇️</b>",
             reply_markup=kb_final_result(),
         )
@@ -579,6 +680,13 @@ async def send_generation_result(
             last_result_file_id=result_file_id,
             file_path=file_path,
         )
+        
+        # ✅ ДОБАВЛЕНО: Удаляем preview после отправки (если это не оригинал)
+        if preview_path != file_path and os.path.exists(preview_path):
+            try:
+                os.unlink(preview_path)
+            except Exception:
+                pass
     
     finally:
         await redis_cli.aclose()

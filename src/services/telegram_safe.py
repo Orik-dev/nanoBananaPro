@@ -101,6 +101,98 @@ async def safe_send_text(
     
     return None
 
+# async def safe_send_photo(
+#     bot: Bot,
+#     chat_id: int,
+#     photo: Union[FSInputFile, bytes],
+#     caption: Optional[str] = None,
+#     reply_markup: Optional[InlineKeyboardMarkup] = None,
+#     parse_mode: str = "HTML",
+# ) -> Optional[Message]:
+#     """✅ УЛУЧШЕНО: с retry и обработкой TelegramServerError"""
+#     if isinstance(photo, FSInputFile):
+#         try:
+#             file_size = os.path.getsize(photo.path)
+#             file_size_mb = file_size / (1024 * 1024)
+            
+#             if file_size_mb > 10:
+#                 log.warning(f"Photo too large ({file_size_mb:.2f} MB), sending as document")
+#                 return await safe_send_document(bot, chat_id, photo.path, caption=caption)
+#         except Exception:
+#             pass
+    
+#     for attempt in range(1, 4):
+#         try:
+#             return await bot.send_photo(
+#                 chat_id, 
+#                 photo=photo, 
+#                 caption=caption, 
+#                 reply_markup=reply_markup, 
+#                 parse_mode=parse_mode
+#             )
+            
+#         except TelegramServerError as e:
+#             # ✅ Обработка 502 Bad Gateway
+#             if attempt < 3:
+#                 wait_time = 3 * attempt
+#                 log.warning(f"TelegramServerError sending photo, retry {attempt}/3 in {wait_time}s")
+#                 await asyncio.sleep(wait_time)
+#                 continue
+            
+#             if attempt == 3:
+#                 log.error(f"TelegramServerError after 3 attempts, trying as document")
+#                 if isinstance(photo, FSInputFile):
+#                     try:
+#                         return await safe_send_document(bot, chat_id, photo.path, caption=caption)
+#                     except Exception:
+#                         pass
+#                 return None
+            
+#         except TelegramBadRequest as e:
+#             error_msg = str(e).lower()
+            
+#             if "internal" in error_msg and attempt < 3:
+#                 wait_time = 3 * attempt
+#                 log.warning(f"Telegram internal error, retry {attempt}/3 in {wait_time}s for chat {chat_id}")
+#                 await asyncio.sleep(wait_time)
+#                 continue
+            
+#             if attempt == 3:
+#                 log.error(f"Failed to send photo after 3 attempts, trying as document: {error_msg[:100]}")
+                
+#                 if isinstance(photo, FSInputFile):
+#                     try:
+#                         return await safe_send_document(bot, chat_id, photo.path, caption=caption)
+#                     except Exception as doc_err:
+#                         log.error(f"Failed to send as document too: {doc_err}")
+                
+#                 log.exception(f"send_photo failed chat_id={chat_id}")
+#                 return None
+        
+#         except TelegramRetryAfter as e:
+#             if attempt < 3:
+#                 await asyncio.sleep(e.retry_after)
+#                 continue
+#             else:
+#                 log.exception(f"send_photo failed after retry chat_id={chat_id}")
+#                 return None
+        
+#         except TelegramForbiddenError:
+#             await _maybe_delete_user(chat_id)
+#             return None
+        
+#         except Exception as e:
+#             if "timeout" in str(e).lower() and attempt < 3:
+#                 wait_time = 5 * attempt
+#                 log.warning(f"Timeout, retry {attempt}/3 in {wait_time}s for chat {chat_id}")
+#                 await asyncio.sleep(wait_time)
+#                 continue
+            
+#             log.exception(f"send_photo failed chat_id={chat_id}")
+#             return None
+    
+#     return None
+
 async def safe_send_photo(
     bot: Bot,
     chat_id: int,
@@ -109,17 +201,19 @@ async def safe_send_photo(
     reply_markup: Optional[InlineKeyboardMarkup] = None,
     parse_mode: str = "HTML",
 ) -> Optional[Message]:
-    """✅ УЛУЧШЕНО: с retry и обработкой TelegramServerError"""
-    if isinstance(photo, FSInputFile):
-        try:
-            file_size = os.path.getsize(photo.path)
-            file_size_mb = file_size / (1024 * 1024)
-            
-            if file_size_mb > 10:
-                log.warning(f"Photo too large ({file_size_mb:.2f} MB), sending as document")
-                return await safe_send_document(bot, chat_id, photo.path, caption=caption)
-        except Exception:
-            pass
+    """✅ ИСПРАВЛЕНО: Убран fallback на document (дублирование)"""
+    
+    # ❌ УДАЛЕНО: Проверка размера и fallback на document
+    # if isinstance(photo, FSInputFile):
+    #     try:
+    #         file_size = os.path.getsize(photo.path)
+    #         file_size_mb = file_size / (1024 * 1024)
+    #         
+    #         if file_size_mb > 10:
+    #             log.warning(f"Photo too large ({file_size_mb:.2f} MB), sending as document")
+    #             return await safe_send_document(bot, chat_id, photo.path, caption=caption)
+    #     except Exception:
+    #         pass
     
     for attempt in range(1, 4):
         try:
@@ -132,21 +226,25 @@ async def safe_send_photo(
             )
             
         except TelegramServerError as e:
-            # ✅ Обработка 502 Bad Gateway
             if attempt < 3:
                 wait_time = 3 * attempt
                 log.warning(f"TelegramServerError sending photo, retry {attempt}/3 in {wait_time}s")
                 await asyncio.sleep(wait_time)
                 continue
             
-            if attempt == 3:
-                log.error(f"TelegramServerError after 3 attempts, trying as document")
-                if isinstance(photo, FSInputFile):
-                    try:
-                        return await safe_send_document(bot, chat_id, photo.path, caption=caption)
-                    except Exception:
-                        pass
-                return None
+            # ❌ УДАЛЕНО: fallback на document
+            # if attempt == 3:
+            #     log.error(f"TelegramServerError after 3 attempts, trying as document")
+            #     if isinstance(photo, FSInputFile):
+            #         try:
+            #             return await safe_send_document(bot, chat_id, photo.path, caption=caption)
+            #         except Exception:
+            #             pass
+            #     return None
+            
+            # ✅ Просто возвращаем None если не удалось
+            log.error(f"TelegramServerError after 3 attempts, failed to send photo")
+            return None
             
         except TelegramBadRequest as e:
             error_msg = str(e).lower()
@@ -157,15 +255,19 @@ async def safe_send_photo(
                 await asyncio.sleep(wait_time)
                 continue
             
+            # ❌ УДАЛЕНО: fallback на document
+            # if attempt == 3:
+            #     log.error(f"Failed to send photo after 3 attempts, trying as document: {error_msg[:100]}")
+            #     if isinstance(photo, FSInputFile):
+            #         try:
+            #             return await safe_send_document(bot, chat_id, photo.path, caption=caption)
+            #         except Exception as doc_err:
+            #             log.error(f"Failed to send as document too: {doc_err}")
+            #     log.exception(f"send_photo failed chat_id={chat_id}")
+            #     return None
+            
+            # ✅ Просто логируем ошибку
             if attempt == 3:
-                log.error(f"Failed to send photo after 3 attempts, trying as document: {error_msg[:100]}")
-                
-                if isinstance(photo, FSInputFile):
-                    try:
-                        return await safe_send_document(bot, chat_id, photo.path, caption=caption)
-                    except Exception as doc_err:
-                        log.error(f"Failed to send as document too: {doc_err}")
-                
                 log.exception(f"send_photo failed chat_id={chat_id}")
                 return None
         
@@ -193,15 +295,14 @@ async def safe_send_photo(
     
     return None
 
-
 async def safe_send_document(
     bot: Bot,
     chat_id: int,
     file_path: str,
     caption: Optional[str] = None,
+    reply_markup: Optional[InlineKeyboardMarkup] = None,  # ✅ ДОБАВЛЕНО
 ):
-    """✅ ИСПРАВЛЕНО: проверка существования и размера файла"""
-    # ✅ ДОБАВЛЕНО: проверка существования и размера
+    """✅ ИСПРАВЛЕНО: добавлен параметр reply_markup"""
     if not os.path.exists(file_path):
         log.error(f"File not found: {file_path}")
         return None
@@ -221,6 +322,7 @@ async def safe_send_document(
                 chat_id, 
                 document=FSInputFile(file_path), 
                 caption=caption,
+                reply_markup=reply_markup,  # ✅ ДОБАВЛЕНО
                 request_timeout=120
             )
             
@@ -237,7 +339,6 @@ async def safe_send_document(
         except TelegramBadRequest as e:
             error_msg = str(e).lower()
             
-            # ✅ ДОБАВЛЕНО: обработка "file must be non-empty"
             if "file must be non-empty" in error_msg:
                 log.error(f"File is empty or corrupted: {file_path}")
                 return None

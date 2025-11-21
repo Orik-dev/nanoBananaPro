@@ -1,0 +1,17 @@
+aiogram==3.20.0
+fastapi==0.115.0
+uvicorn==0.30.6
+gunicorn==22.0.0
+httpx==0.27.2
+arq==0.25.0
+redis==5.0.8
+SQLAlchemy==2.0.34
+aiomysql==0.2.0
+yookassa==3.3.0
+python-dotenv==1.0.1
+pydantic-settings==2.4.0
+orjson==3.10.7
+tenacity==9.0.0
+aioredis
+SpeechRecognition==3.10.0
+pydub==0.25.1

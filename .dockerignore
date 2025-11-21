@@ -1,0 +1,32 @@
+# VCS / IDE
+.git
+.gitignore
+.gitattributes
+.vscode
+.idea
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+# локальные виртуалки / кеши
+.venv
+env
+venv
+pip-wheel-metadata
+.mypy_cache
+.pytype
+.pytest_cache
+
+# артефакты
+dist
+build
+*.log
+*.sqlite
+*.db
+tmp
+.cache
+
+# ОС
+.DS_Store
+Thumbs.db
